@@ -528,8 +528,6 @@ export const useTeamStore = create<TeamStore>((set, get) => ({
       const isActiveTeam = s.activeTeam?.name === teamName
       if (isActiveTeam) {
         markMemberSessionsDisconnected(s.activeTeam?.members.map((m) => m.agentId) ?? [])
-      }
-      if (isActiveTeam) {
         try {
           localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY)
         } catch { /* noop */ }
@@ -542,26 +540,6 @@ export const useTeamStore = create<TeamStore>((set, get) => ({
   },
 
   deleteMember: async (agentId: string) => {
-    const team = get().activeTeam
-    if (!team) {
-      throw new Error('No active team')
-    }
-
-    await teamsApi.deleteMember(team.name, agentId)
-    markMemberSessionsDisconnected([agentId])
-
-    // Optimistically remove member from local state
-    set((s) => ({
-      activeTeam: s.activeTeam
-        ? {
-            ...s.activeTeam,
-            members: s.activeTeam.members.filter((m) => m.agentId !== agentId),
-          }
-        : null,
-    }))
-  },
-
-  stopMember: async (agentId: string) => {
     const team = get().activeTeam
     if (!team) {
       throw new Error('No active team')

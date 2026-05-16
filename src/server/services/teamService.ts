@@ -43,7 +43,6 @@ function addNameVariants(names: Set<string>, name: string): void {
   names.add(name)
   names.add(toMailboxName(name))
 }
-
 export type TeamMember = {
   agentId: string
   name: string
