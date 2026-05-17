@@ -200,6 +200,10 @@ describe('TeamService', () => {
     Object.assign(config.members[1]!, {
       inputTokens: 12345,
       outputTokens: 678,
+      runtime: {
+        providerId: 'openrouter',
+        modelId: 'openai/gpt-5.4',
+      },
     })
     await writeTeamConfig('metrics-team', config)
 
@@ -209,6 +213,12 @@ describe('TeamService', () => {
     expect(worker.joinedAt).toBe(1700000001000)
     expect(worker.inputTokens).toBe(12345)
     expect(worker.outputTokens).toBe(678)
+    expect(worker.providerId).toBe('openrouter')
+    expect(worker.modelId).toBe('openai/gpt-5.4')
+    expect(worker.runtime).toEqual({
+      providerId: 'openrouter',
+      modelId: 'openai/gpt-5.4',
+    })
   })
 
   it('should derive member token metrics from transcript usage when config has none', async () => {
