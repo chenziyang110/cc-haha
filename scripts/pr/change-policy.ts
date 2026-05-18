@@ -217,7 +217,9 @@ const AREA_TEST_PATTERNS: Record<string, string[]> = {
 /** 核心 smoke 测试集：始终运行，验证系统基础设施完整性 */
 const CORE_SMOKE_PATTERNS = [
   'scripts/pr/change-policy.test.ts',
-  'scripts/quality-gate/**/*.test.*',
+  'scripts/quality-gate/quarantine.test.ts',
+  'scripts/quality-gate/fast-mode.test.ts',
+  'scripts/quality-gate/layered-pr.test.ts',
 ]
 
 /** 可选的测试区域（不含 release 和 cli-core，它们由专门的门控处理） */

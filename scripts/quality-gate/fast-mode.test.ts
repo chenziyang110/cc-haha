@@ -237,9 +237,9 @@ describe('fast mode isolation', () => {
     const fastOnlyLanes = ['core-smoke', 'fast-lane-tests']
     const prLaneIds = prLanes.map((l) => l.id)
 
-    // Note: core-smoke and fast-lane-tests might be shared with PR mode
-    // per plan.md Phase 4 (layered PR mode), so this is informational
-    // The key invariant is that PR mode behavior is preserved
+    for (const lane of fastOnlyLanes) {
+      expect(prLaneIds).not.toContain(lane)
+    }
   })
 
   test('fast mode lanes are distinct from release mode lanes', () => {

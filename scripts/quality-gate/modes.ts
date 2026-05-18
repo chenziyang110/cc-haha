@@ -3,7 +3,7 @@ import type { BaselineTarget, LaneDefinition, QualityGateMode } from './types'
 
 export function lanesForMode(mode: QualityGateMode, baselineTargets: BaselineTarget[] = []): LaneDefinition[] {
   // Lanes are defined in execution order for each mode:
-  // PR mode: impact-report -> policy-checks -> core-smoke -> fast-lane-tests -> area checks -> coverage -> heavy checks
+  // PR mode: impact-report -> policy-checks -> area checks -> coverage -> heavy checks
   // Fast mode: impact-report -> policy-checks -> core-smoke -> fast-lane-tests
   // Baseline/Release: impact-report -> policy-checks -> coverage (full) -> heavy checks -> baseline cases -> live smokes
   const lanes: LaneDefinition[] = [
@@ -34,8 +34,8 @@ export function lanesForMode(mode: QualityGateMode, baselineTargets: BaselineTar
       title: 'Core smoke tests',
       description: 'Tiny fixed set of critical-path smoke tests for fast feedback. Validates policy and quarantine governance tests.',
       kind: 'command',
-      command: ['bun', 'test', 'scripts/quality-gate/policy.test.ts', 'scripts/quality-gate/quarantine.test.ts'],
-      requiredForModes: ['fast', 'pr'],
+      command: ['bun', 'test', 'scripts/pr/change-policy.test.ts', 'scripts/quality-gate/quarantine.test.ts'],
+      requiredForModes: ['fast'],
       category: 'smoke',
       timeoutMs: 30000,
       executionKind: 'sequential',
@@ -46,8 +46,7 @@ export function lanesForMode(mode: QualityGateMode, baselineTargets: BaselineTar
       description: 'Changed-area dynamic test selection based on impact analysis. Runs only tests relevant to modified files.',
       kind: 'command',
       command: ['bun', 'run', 'check:fast-lane'],
-      impactRequiredCheck: 'bun run check:fast-lane',
-      requiredForModes: ['fast', 'pr'],
+      requiredForModes: ['fast'],
       category: 'unit',
       timeoutMs: 60000,
       dependsOn: ['impact-report'],

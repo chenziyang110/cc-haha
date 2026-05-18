@@ -75,15 +75,26 @@ async function pipeToLog(
   stream: ReadableStream<Uint8Array> | null,
   logPath: string,
   write: (chunk: Buffer) => void,
+  stop: Promise<unknown>,
 ) {
   if (!stream) return
   const reader = stream.getReader()
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    const chunk = Buffer.from(value)
-    appendFileSync(logPath, chunk)
-    write(chunk)
+  let stopped = false
+  stop.finally(() => {
+    stopped = true
+    reader.cancel().catch(() => undefined)
+  }).catch(() => undefined)
+  try {
+    while (!stopped) {
+      const { done, value } = await reader.read()
+      if (done || !value) break
+      const chunk = Buffer.from(value)
+      appendFileSync(logPath, chunk)
+      write(chunk)
+    }
+  } catch {
+    // The runner may cancel log readers after the child command exits. That is
+    // expected when grandchildren keep inherited stdout/stderr handles open.
   }
 }
 
@@ -116,11 +127,15 @@ export function determineFeedbackType(mode: QualityGateMode): FeedbackType {
 export function determineReadyForMerge(
   mode: QualityGateMode,
   summary: { passed: number; failed: number; skipped: number },
+  impact?: ImpactSummary,
 ): boolean {
   // Fast mode is NEVER merge-ready (CA-002)
   if (mode === 'fast') return false
   // Baseline mode is for coverage tracking, not PR readiness
   if (mode === 'baseline') return false
+  // A policy-blocked impact report must prevent PR/release readiness even
+  // when individual command lanes exit successfully.
+  if (impact?.blocked) return false
   // PR and release modes are merge-ready when all checks pass (no failures)
   return summary.failed === 0
 }
@@ -229,10 +244,13 @@ async function runCommandLane(lane: LaneDefinition, options: QualityGateOptions)
     stdout: 'pipe',
     stderr: 'pipe',
   })
-  const [exitCode] = await Promise.all([
-    proc.exited,
-    pipeToLog(proc.stdout, logPath, writeStdout),
-    pipeToLog(proc.stderr, logPath, writeStderr),
+  const exitCode = await proc.exited
+  await Promise.race([
+    Promise.all([
+      pipeToLog(proc.stdout, logPath, writeStdout, proc.exited),
+      pipeToLog(proc.stderr, logPath, writeStderr, proc.exited),
+    ]),
+    new Promise<void>((resolve) => setTimeout(resolve, 250)),
   ])
 
   return {
@@ -567,6 +585,9 @@ export async function runQualityGateLanes(
   // Parse risk assessment from impact-report for escalation metadata
   const riskAssessment = parseRiskAssessment(results)
 
+  const impact = parseImpactSummary(results)
+  const summary = summarize(results)
+
   const report: QualityGateReport = {
     schemaVersion: 1,
     runId,
@@ -578,14 +599,14 @@ export async function runQualityGateLanes(
     rootDir: options.rootDir,
     git: await gitInfo(options.rootDir),
     results,
-    impact: parseImpactSummary(results),
+    impact,
     coverage: parseCoverageSummary(results),
     artifacts: collectReportArtifacts(outputDir, results),
-    summary: summarize(results),
+    summary,
     // CA-002: feedbackType distinguishes fast (development signal) from full (PR readiness)
     feedbackType: determineFeedbackType(options.mode),
     // CA-002: readyForMerge is always false for fast mode, true for PR/release when all checks pass
-    readyForMerge: determineReadyForMerge(options.mode, summarize(results)),
+    readyForMerge: determineReadyForMerge(options.mode, summary, impact),
     // Escalation metadata from risk assessment
     ...(riskAssessment.riskLevel ? { riskLevel: riskAssessment.riskLevel } : {}),
     ...(riskAssessment.escalatedChecks ? { escalatedChecks: riskAssessment.escalatedChecks } : {}),

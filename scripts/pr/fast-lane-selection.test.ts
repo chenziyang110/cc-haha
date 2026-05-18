@@ -339,6 +339,23 @@ describe('selectFastLaneTests', () => {
       )
       expect(hasPolicyTest).toBe(true)
     })
+
+    test('core smoke excludes baseline and smoke fixtures', () => {
+      const result = selectFastLaneTests(['docs/api.md'])
+
+      expect(result.coreSmoke.some(p => p.includes('fixtures'))).toBe(false)
+      expect(result.coreSmoke.some(p => p.includes('baseline/fixtures'))).toBe(false)
+      expect(result.coreSmoke.some(p => p.includes('desktop-smoke/fixtures'))).toBe(false)
+    })
+
+    test('core smoke remains bounded for large PRs', () => {
+      const result = selectFastLaneTests(
+        Array.from({ length: 500 }, (_, index) => `src/server/example-${index}.ts`),
+      )
+
+      expect(result.coreSmoke.length).toBeLessThanOrEqual(5)
+      expect(Object.values(result.selectedTests).flat().length).toBeLessThanOrEqual(8)
+    })
   })
 
   describe('risk level assessment', () => {

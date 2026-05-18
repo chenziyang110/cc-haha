@@ -25,40 +25,31 @@ describe('layered PR mode lane ordering', () => {
     const layer1Indices = layer1Lanes.map((id) => laneIds.indexOf(id))
     const layer1MaxIndex = Math.max(...layer1Indices)
 
-    // Layer 2: core-smoke, fast-lane-tests (always run after layer 1)
-    // Note: core-smoke and fast-lane-tests lanes are NEW features being added
+    // Layer 2 is reserved for fast mode. PR mode skips it to avoid duplicating
+    // the full area-specific checks.
     const coreSmokeIndex = laneIds.indexOf('core-smoke')
     const fastLaneTestsIndex = laneIds.indexOf('fast-lane-tests')
 
     // 验证 Layer 1 lanes 存在于 PR 模式
     expect(layer1Indices.every((idx) => idx >= 0)).toBe(true)
 
-    // core-smoke lane should exist in PR mode
-    expect(coreSmokeIndex).toBeGreaterThanOrEqual(0)
-
-    // fast-lane-tests lane should exist in PR mode
-    expect(fastLaneTestsIndex).toBeGreaterThanOrEqual(0)
-
-    // Layer 2 lanes should execute after Layer 1 lanes
-    expect(coreSmokeIndex).toBeGreaterThan(layer1MaxIndex)
-    expect(fastLaneTestsIndex).toBeGreaterThan(layer1MaxIndex)
+    expect(coreSmokeIndex).toBe(-1)
+    expect(fastLaneTestsIndex).toBe(-1)
 
     // Layer 3: area-specific checks (desktop-checks, server-checks, adapter-checks)
-    // Should execute after Layer 2
+    // Should execute after Layer 1
     const layer3Lanes = ['desktop-checks', 'server-checks', 'adapter-checks']
     const layer3Indices = layer3Lanes.map((id) => laneIds.indexOf(id)).filter((idx) => idx >= 0)
-    const layer2MaxIndex = Math.max(coreSmokeIndex, fastLaneTestsIndex)
 
     if (layer3Indices.length > 0) {
-      // RED TEST: Area-specific checks should come after Layer 2
       for (const idx of layer3Indices) {
-        expect(idx).toBeGreaterThan(layer2MaxIndex)
+        expect(idx).toBeGreaterThan(layer1MaxIndex)
       }
     }
 
     // Layer 4: coverage (should use changed-line mode for PR)
     const coverageIndex = laneIds.indexOf('coverage')
-    const layer3MaxIndex = layer3Indices.length > 0 ? Math.max(...layer3Indices) : layer2MaxIndex
+    const layer3MaxIndex = layer3Indices.length > 0 ? Math.max(...layer3Indices) : layer1MaxIndex
 
     // RED TEST: Coverage should execute after area-specific checks
     expect(coverageIndex).toBeGreaterThan(layer3MaxIndex)
@@ -210,6 +201,19 @@ describe('PR readiness output labeling', () => {
     expect(determineReadyForMerge('pr', summary)).toBe(false)
   })
 
+  test('PR mode reports readyForMerge false when impact policy is blocked', () => {
+    const summary = { passed: 3, failed: 0, skipped: 0 }
+    expect(determineReadyForMerge('pr', summary, {
+      changedFiles: 1,
+      areas: ['cli-core'],
+      labels: [],
+      blocked: true,
+      requiredChecks: [],
+      testCoverageSignals: [],
+      riskNotes: [],
+    })).toBe(false)
+  })
+
   test('baseline mode never reports readyForMerge true', () => {
     // Baseline mode is for coverage measurement, not merge readiness
     const summary = { passed: 10, failed: 0, skipped: 0 }
@@ -241,7 +245,7 @@ describe('CA-001 verification: verify command mapping', () => {
 
 describe('core smoke set definition', () => {
   test('core-smoke lane has appropriate configuration', () => {
-    const lanes = lanesForMode('pr')
+    const lanes = lanesForMode('fast')
 
     // RED TEST: core-smoke lane should exist
     const coreSmokeLane = lanes.find((lane) => lane.id === 'core-smoke')
@@ -264,7 +268,7 @@ describe('core smoke set definition', () => {
 
 describe('changed-area tests lane definition', () => {
   test('fast-lane-tests lane exists and has correct configuration', () => {
-    const lanes = lanesForMode('pr')
+    const lanes = lanesForMode('fast')
 
     // fast-lane-tests lane should exist (implemented in T008)
     const fastLaneTestsLane = lanes.find((lane) => lane.id === 'fast-lane-tests')
