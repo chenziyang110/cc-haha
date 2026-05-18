@@ -34,10 +34,10 @@ function hasFlag(args: Map<string, Array<string | boolean>>, name: string) {
 }
 
 function readMode(value: string | boolean | undefined): QualityGateMode {
-  if (value === 'pr' || value === 'baseline' || value === 'release') {
+  if (value === 'pr' || value === 'baseline' || value === 'release' || value === 'fast') {
     return value
   }
-  throw new Error('Usage: bun run quality:gate --mode <pr|baseline|release> [--dry-run] [--allow-live] [--provider-model provider:model[:label]] [--only lane-id|prefix*] [--skip lane-id|prefix*]')
+  throw new Error('Usage: bun run quality:gate --mode <pr|baseline|release|fast> [--dry-run] [--allow-live] [--provider-model provider:model[:label]] [--only lane-id|prefix*] [--skip lane-id|prefix*]')
 }
 
 function readBaselineTargets(args: Map<string, Array<string | boolean>>): BaselineTarget[] {
