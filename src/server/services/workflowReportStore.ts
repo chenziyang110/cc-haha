@@ -131,14 +131,11 @@ function artifactIndexValues(state: WorkflowSessionState): Array<Record<string, 
   return []
 }
 
-function hasAcceptedCompletionArtifact(state: WorkflowSessionState): boolean {
-  return artifactIndexValues(state).some((artifact) => artifact.lifecycleStatus === 'accepted')
-}
-
 function canCreateFinalReport(state: WorkflowSessionState): boolean {
   return (
-    (state.workflowStatus === 'completed' && state.status === 'completed')
-    || hasAcceptedCompletionArtifact(state)
+    state.workflowStatus === 'completed'
+    && state.status === 'completed'
+    && state.activePhaseId === null
   )
 }
 

@@ -3051,6 +3051,74 @@ describe('Sessions API', () => {
       expectNoAbsolutePathLeak(body)
     })
 
+    it('POST /api/sessions/:id/workflow/transition confirm final phase should persist a readable final report artifact', async () => {
+      const sessionId = 'aaaaaaaa-bbbb-cccc-dddd-191919191917'
+      const workDir = path.join(tmpDir, 'api-workflow-final-confirm-report')
+      await writeWorkflowSessionState(sessionId, makeFinalPendingWorkflowTransitionState(sessionId))
+      await writeSessionFile(sanitizePath(workDir), sessionId, [
+        makeSnapshotEntry(),
+        makeWorkflowSessionMetaEntry(sessionId, workDir, {
+          templateId: 'agent-development',
+          templateSnapshotId: 'agent-development-v1',
+          status: 'pending-confirmation',
+          workflowStatus: 'pending-confirmation',
+          activePhaseId: 'discussion',
+          stateRevision: 3,
+          reportPointer: undefined,
+          reportRef: undefined,
+        }),
+        makeUserEntry('Confirm the final workflow phase'),
+      ])
+
+      const transitionRes = await fetch(`${baseUrl}/api/sessions/${sessionId}/workflow/transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phaseId: 'discussion',
+          action: 'confirm',
+          stateVersion: 3,
+          transitionId: 'confirm-final-discussion-ready',
+        }),
+      })
+      expect(transitionRes.status).toBe(200)
+      const transitionBody = (await transitionRes.json()) as {
+        workflow: { status: string; reportPointer?: Record<string, unknown> }
+      }
+
+      expect(transitionBody.workflow).toMatchObject({
+        status: 'completed',
+        reportPointer: {
+          kind: 'final-report',
+          sessionId,
+          artifactId: 'final',
+        },
+      })
+
+      const reportRes = await fetch(`${baseUrl}/api/sessions/${sessionId}/workflow/report`)
+      expect(reportRes.status).toBe(200)
+      const reportBody = (await reportRes.json()) as {
+        pointer: Record<string, unknown>
+        report: {
+          sessionId: string
+          status?: string
+          conversationSummary?: string
+          phaseSummaries: Array<{ phaseId: string; status: string }>
+        }
+      }
+
+      expect(reportBody.pointer).toEqual(transitionBody.workflow.reportPointer)
+      expect(reportBody.report).toMatchObject({
+        sessionId,
+        status: 'completed',
+        conversationSummary: 'Workflow completed.',
+      })
+      expect(reportBody.report.phaseSummaries).toContainEqual(expect.objectContaining({
+        phaseId: 'discussion',
+        status: 'completed',
+      }))
+      expectNoAbsolutePathLeak(reportBody)
+    })
+
     it('POST /api/sessions should reject invalid workflow payloads without partial transcripts or artifacts', async () => {
       const workDir = await fs.mkdtemp(path.join(tmpDir, 'api-invalid-workflow-'))
       const cases: Array<{

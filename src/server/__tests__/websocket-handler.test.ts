@@ -1052,34 +1052,55 @@ describe('WebSocket handler workflow runtime gating', () => {
     const sessionId = `workflow-final-${crypto.randomUUID()}`
     const ws = makeClientSocket(sessionId)
     const stateService = new WorkflowSessionStateService()
+    const originalConfigDir = process.env.CLAUDE_CONFIG_DIR
+    const tempConfigDir = path.join(os.tmpdir(), `cc-haha-websocket-final-report-${crypto.randomUUID()}`)
+    process.env.CLAUDE_CONFIG_DIR = tempConfigDir
     spyOn(sessionService, 'getSessionWorkDir').mockResolvedValue(process.cwd())
     spyOn(sessionService, 'appendSessionMetadata').mockResolvedValue()
-    await stateService.writeState(sessionId, makeFinalPendingWorkflowState(sessionId))
 
-    handleWebSocket.open(ws)
-    handleWebSocket.message(ws, JSON.stringify({
-      type: 'workflow_transition',
-      phaseId: 'requirements-clarification',
-      action: 'confirm',
-      stateVersion: 3,
-      transitionId: 'confirm-final-ready',
-    }))
-    await waitForCondition(() => parseSentMessages(ws).some((message) =>
-      message.type === 'system_notification'
-      && message.subtype === 'workflow_report_ready'
-    ))
+    try {
+      await stateService.writeState(sessionId, makeFinalPendingWorkflowState(sessionId))
 
-    expect(parseSentMessages(ws)).toContainEqual(expect.objectContaining({
-      type: 'system_notification',
-      subtype: 'workflow_report_ready',
-      data: expect.objectContaining({
-        sessionId,
-        reportPointer: expect.objectContaining({
-          kind: 'final-report',
-          artifactId: 'final',
+      handleWebSocket.open(ws)
+      handleWebSocket.message(ws, JSON.stringify({
+        type: 'workflow_transition',
+        phaseId: 'requirements-clarification',
+        action: 'confirm',
+        stateVersion: 3,
+        transitionId: 'confirm-final-ready',
+      }))
+      await waitForCondition(() => parseSentMessages(ws).some((message) =>
+        message.type === 'system_notification'
+        && message.subtype === 'workflow_report_ready'
+      ))
+
+      expect(parseSentMessages(ws)).toContainEqual(expect.objectContaining({
+        type: 'system_notification',
+        subtype: 'workflow_report_ready',
+        data: expect.objectContaining({
+          sessionId,
+          reportPointer: expect.objectContaining({
+            kind: 'final-report',
+            artifactId: 'final',
+          }),
         }),
-      }),
-    }))
+      }))
+
+      const reportPath = path.join(tempConfigDir, 'cc-haha', 'workflow-sessions', sessionId, 'reports', 'final.json')
+      const report = JSON.parse(await fs.readFile(reportPath, 'utf-8')) as Record<string, unknown>
+      expect(report).toMatchObject({
+        sessionId,
+        status: 'completed',
+        conversationSummary: 'Workflow completed.',
+      })
+    } finally {
+      if (originalConfigDir === undefined) {
+        delete process.env.CLAUDE_CONFIG_DIR
+      } else {
+        process.env.CLAUDE_CONFIG_DIR = originalConfigDir
+      }
+      await fs.rm(tempConfigDir, { recursive: true, force: true })
+    }
   })
 
   it('rejects dialogue websocket workflow transitions without leaking workflow metadata', async () => {

@@ -22,6 +22,8 @@ import { diagnosticsService } from '../services/diagnosticsService.js'
 import { deriveTitle, generateTitle, saveAiTitle } from '../services/titleService.js'
 import { WorkflowRuntimeService } from '../services/workflowRuntimeService.js'
 import { WorkflowSessionStateService } from '../services/workflowSessionStateService.js'
+import { WorkflowReportStore } from '../services/workflowReportStore.js'
+import { buildWorkflowFinalReport } from '../services/workflowFinalReport.js'
 import {
   getWorkflowPhaseDisallowedTools,
   getWorkflowPromptToolGuidance,
@@ -51,6 +53,7 @@ const settingsService = new SettingsService()
 const providerService = new ProviderService()
 const workflowRuntimeService = new WorkflowRuntimeService()
 const workflowSessionStateService = new WorkflowSessionStateService()
+const workflowReportStore = new WorkflowReportStore()
 
 /**
  * Cache slash commands from CLI init messages, keyed by sessionId.
@@ -2270,6 +2273,7 @@ async function persistWorkflowStateIfAvailable(
     return null
   })
   if (!write) return
+  await persistWorkflowFinalReportIfReady(write.state)
 
   const workDir =
     conversationService.getSessionWorkDir(sessionId) ||
@@ -2283,6 +2287,13 @@ async function persistWorkflowStateIfAvailable(
     workflow: model ? { ...metadata, model } : metadata,
   }).catch((error) => {
     console.warn(`[WS] Failed to append workflow metadata for ${sessionId}:`, error)
+  })
+}
+
+async function persistWorkflowFinalReportIfReady(state: WorkflowSessionState): Promise<void> {
+  if (!state.finalReportRef) return
+  await workflowReportStore.createFinalReport(state.sessionId, buildWorkflowFinalReport(state)).catch((error) => {
+    console.warn(`[WS] Failed to persist workflow final report for ${state.sessionId}:`, error)
   })
 }
 

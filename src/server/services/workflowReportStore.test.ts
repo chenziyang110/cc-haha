@@ -96,7 +96,7 @@ function makeFinalReport(overrides: Record<string, unknown> = {}): Record<string
 describe('WorkflowReportStore', () => {
   test('writes final reports before exposing a safe immutable report pointer', async () => {
     const store = new WorkflowReportStore()
-    await copyStateFixture('accepted-completion-state.json')
+    await copyStateFixture('completed-final-report-state.json')
     const report = makeFinalReport()
 
     const result = await store.createFinalReport(SESSION_ID, report)
@@ -120,7 +120,7 @@ describe('WorkflowReportStore', () => {
 
   test('keeps report creation idempotent and preserves the existing final report on retry', async () => {
     const store = new WorkflowReportStore()
-    await copyStateFixture('accepted-completion-state.json')
+    await copyStateFixture('completed-final-report-state.json')
     const firstReport = makeFinalReport({
       conversationSummary: 'Original summary.',
       futureReportField: { preserved: true },
@@ -194,6 +194,15 @@ describe('WorkflowReportStore', () => {
   test('does not create a final report before the owning workflow state is completed', async () => {
     const store = new WorkflowReportStore()
     await copyStateFixture('pending-ready-state.json')
+
+    await expect(store.createFinalReport(SESSION_ID, makeFinalReport())).rejects.toThrow(/completed workflow state/i)
+
+    await expect(fs.readFile(reportPath(), 'utf-8')).rejects.toThrow()
+  })
+
+  test('does not create a final report from an accepted intermediate phase artifact', async () => {
+    const store = new WorkflowReportStore()
+    await copyStateFixture('accepted-completion-state.json')
 
     await expect(store.createFinalReport(SESSION_ID, makeFinalReport())).rejects.toThrow(/completed workflow state/i)
 

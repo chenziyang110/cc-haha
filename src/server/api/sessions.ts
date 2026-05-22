@@ -40,6 +40,7 @@ import {
 import { WorkflowSessionStateService } from '../services/workflowSessionStateService.js'
 import { WorkflowReportStore } from '../services/workflowReportStore.js'
 import { WorkflowRuntimeService } from '../services/workflowRuntimeService.js'
+import { buildWorkflowFinalReport } from '../services/workflowFinalReport.js'
 import {
   type CompletionSubmission,
   type WorkflowSessionCreateOptions,
@@ -707,6 +708,7 @@ async function transitionWorkflow(req: Request, sessionId: string): Promise<Resp
     const requestedAt = new Date().toISOString()
     const result = await applyWorkflowBoundaryTransition(stateRead.state, body, requestedAt)
     const { pointer } = await workflowSessionStateService.writeState(sessionId, result.state)
+    await persistWorkflowFinalReportIfReady(result.state)
     const detail = await sessionService.getSession(sessionId)
     const workDir = detail.workDir || process.cwd()
     await appendWorkflowMetadata(sessionId, workDir, stateToWorkflowMetadata(result.state, pointer))
@@ -720,6 +722,11 @@ async function transitionWorkflow(req: Request, sessionId: string): Promise<Resp
       workflow: workflowSummaryFromState(result.state),
     })
   })
+}
+
+async function persistWorkflowFinalReportIfReady(state: WorkflowSessionState): Promise<void> {
+  if (!state.finalReportRef) return
+  await workflowReportStore.createFinalReport(state.sessionId, buildWorkflowFinalReport(state))
 }
 
 function assertWorkflowStateTrustedForTransition(state: WorkflowSessionState): void {
